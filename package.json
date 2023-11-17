@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@types/three": "^0.158.2",
-    "ammo.js": "github:kripken/ammo.js",
+    "ammojs-typed": "^1.0.6",
     "three": "^0.158.0"
   }
 }

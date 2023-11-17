@@ -19,5 +19,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "typeRoots": ["node_modules/ammojs-typed/ammo/ambient"]
 }
