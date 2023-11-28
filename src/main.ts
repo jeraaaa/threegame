@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 import Ammo from 'ammojs-typed';
-import { ThreeMFLoader } from 'three/examples/jsm/Addons.js';
 
 const loader = new GLTFLoader();
 
@@ -85,14 +84,27 @@ function initWorld() {
   let colShape: Ammo.btCollisionShape = new Ammo.btCapsuleShape(1, 2);
   colShape.setMargin(0.05);
   let inertia = new Ammo.btVector3(0, 0, 0);
-  colShape.calculateLocalInertia(1, inertia);
-  let info = new Ammo.btRigidBodyConstructionInfo(1, new Ammo.btDefaultMotionState(transform), colShape, inertia);
+  colShape.calculateLocalInertia(8, inertia);
+  let info = new Ammo.btRigidBodyConstructionInfo(8, new Ammo.btDefaultMotionState(transform), colShape, inertia);
   player = new Ammo.btRigidBody(info);
-  player.setFriction(2.5);
-  player.setDamping(0.8, 0);
-  //limit rotation to around y-axis
-  player.setAngularFactor(new Ammo.btVector3(0, 1, 0));
+  player.setFriction(0);
+  //limit rotation to y-axis
+  player.setAngularFactor(new Ammo.btVector3(0, 0, 0));
+  /*
+  ACTIVE_TAG 1
+  ISLAND_SLEEPING 2
+  WANTS_DEACTIVATION 3
+  DISABLE_DEACTIVATION 4
+  DISABLE_SIMULATION 5
+  */
+  // make sure physics for the player is always active
+  player.setActivationState(4);
   physicsWorld.addRigidBody(player);
+  // let capsule = new THREE.Mesh(new THREE.CapsuleGeometry(1, 2), new THREE.MeshPhongMaterial({color: 0xdddddd}));
+  // capsule.position.set(0, 0, 0);
+  // scene.add(capsule);
+  // capsule.userData.physicsBody = player;
+  // rigidBodies.push(capsule);
 
   // create floor
   let block = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 100), new THREE.MeshBasicMaterial({color: 0xff0000, wireframe: true}));
@@ -115,7 +127,7 @@ function initWorld() {
   colShape = new Ammo.btBoxShape(new Ammo.btVector3(1, 1, 1));
   colShape.setMargin(0.05);
   inertia = new Ammo.btVector3(0, 0, 0);
-  colShape.calculateLocalInertia(0, inertia);
+  colShape.calculateLocalInertia(8, inertia);
   info = new Ammo.btRigidBodyConstructionInfo(8, new Ammo.btDefaultMotionState(transform), colShape, inertia);
   let body = new Ammo.btRigidBody(info)
   physicsWorld.addRigidBody(body);
@@ -140,11 +152,19 @@ function createMesh(path: string) {
 }
 
 const keys: {[index: string]: boolean} = {};
+const inputs: {key: string, time: number}[] = [];
 
 window.addEventListener("keydown", (e: KeyboardEvent) => {
   const key: string = e.key.toLowerCase();
 
+  if (key === "t") {
+    player.setLinearVelocity(new Ammo.btVector3(10, 10, 10));
+  }
+
   keys[key] = true;
+
+  if (e.repeat) return;
+  inputs.push({key: key, time: clock.elapsedTime});
 });
 
 window.addEventListener("keyup", (e: KeyboardEvent) => {
@@ -171,17 +191,53 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+function square(n: number) {
+  return n * n;
+}
+
+let grounded = false;
+let slope: Ammo.btVector3;
+
+const contacts: Map<Ammo.btCollisionObject, Ammo.btPersistentManifold> = new Map();
+
 function animate() {
   requestAnimationFrame(animate);
-
   renderer.render(scene, camera);
 
   const dt = clock.getDelta();
   physicsWorld.stepSimulation(dt);
 
+  grounded = false;
+  const dispatcher = physicsWorld.getDispatcher();
+  slope = new Ammo.btVector3(0, -1, 0);
+  for (let i = 0; i < dispatcher.getNumManifolds(); i++) {
+    const manifold = dispatcher.getManifoldByIndexInternal(i);
+    const obj1 = Ammo.btRigidBody.prototype.upcast(manifold.getBody0());
+    const obj2 = Ammo.btRigidBody.prototype.upcast(manifold.getBody1());
+    
+    if (player != obj1 && player != obj2) continue;
+    for (let j = 0; j < manifold.getNumContacts(); j++) {
+      const point = manifold.getContactPoint(j);
+      
+      if (point.getDistance() <= 1) {
+        let normal = point.get_m_normalWorldOnB();
+        if (obj2 == player) {
+          normal.op_mul(-1);
+        }
+        // console.log(`X: ${normal.x()} Y: ${normal.y()} Z: ${normal.z()}`)
+        // console.log(Math.acos(normal.y()) < 45*Math.PI/180);
+        if (Math.acos(normal.y()) < Math.acos(slope.y())) slope = normal;
+      }
+    }
+  }
+  if (Math.acos(slope.y()) < 45*Math.PI/180) grounded = true;
+  
   player.getMotionState().getWorldTransform(transform);
   const playerPos = transform.getOrigin();
-
+  const rotation = new THREE.Quaternion();
+  camera.getWorldQuaternion(rotation);
+  transform.setRotation(new Ammo.btQuaternion(rotation.x, rotation.y, rotation.z, rotation.w));
+  // player.setWorldTransform(transform);
   camera.position.set(playerPos.x(), playerPos.y()+1, playerPos.z());
 
   const input = new THREE.Vector2((keys.d)? 1:0 + ((keys.a)? -1:0), (keys.w)? 1:0 + ((keys.s)? -1:0));
@@ -189,7 +245,43 @@ function animate() {
   const yaw = camera.rotation.y;
   const cos = Math.cos(yaw);
   const sin = Math.sin(yaw);
-  player.applyCentralImpulse(new Ammo.btVector3((sin * input.y - cos * input.x) * -0.5, 0, (cos * input.y + sin * input.x) * -0.5));
+  const vel = player.getLinearVelocity();
+  // let speed = Math.sqrt(square(vel.x()) + square(vel.z()));
+
+  let speed = 288;
+  if (!grounded) {
+    speed *= 0.1;
+  } else {
+    player.setLinearVelocity(new Ammo.btVector3(vel.x()*0.95, vel.y(), vel.z()*0.95));
+  }
+  player.applyCentralForce(new Ammo.btVector3((sin * input.y - cos * input.x)*-speed, 0, (cos * input.y + sin * input.x)*-speed));
+  console.log(`X: ${vel.x()} Y: ${vel.y()} Z: ${vel.z()}`);
+;  for (let i = 0; i < inputs.length; i++) {
+    const key = inputs.pop();
+    assert(key);
+    if (key.key === " " && grounded) {
+      player.applyCentralImpulse(new Ammo.btVector3(0, 60, 0));
+    } else if (key.key === "e") {
+      player.getMotionState().getWorldTransform(transform);
+      const pos = transform.getOrigin();
+      pos.setX(pos.x() + 2);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshPhongMaterial({color: 0x00ff00}));
+      mesh.position.set(pos.x(), pos.y(), pos.z());
+      scene.add(mesh);
+      // transform.setIdentity();
+      transform.setOrigin(new Ammo.btVector3(pos.x(), pos.y(), pos.z()));
+      transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
+      let colShape: Ammo.btCollisionShape = new Ammo.btBoxShape(new Ammo.btVector3(0.5, 0.5, 0.5));
+      colShape.setMargin(0.05);
+      let inertia = new Ammo.btVector3(0, 0, 0);
+      colShape.calculateLocalInertia(8, inertia);
+      let info = new Ammo.btRigidBodyConstructionInfo(8, new Ammo.btDefaultMotionState(transform), colShape, inertia);
+      const body = new Ammo.btRigidBody(info);
+      mesh.userData.physicsBody = body;
+      physicsWorld.addRigidBody(body);
+      rigidBodies.push(mesh);
+    }
+  }
 
   for (let i = 0; i < rigidBodies.length; i++) {
     let mesh = rigidBodies[i];
