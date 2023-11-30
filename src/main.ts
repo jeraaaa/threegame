@@ -93,11 +93,13 @@ function loop() {
     const dispatcher = Engine.world.getDispatcher();
     grounded = false;
     slope = new Ammo.btVector3(0, -1, 0);
+    // iterate through collisions
     for (let i = 0; i < dispatcher.getNumManifolds(); i++) {
         const manifold = dispatcher.getManifoldByIndexInternal(i);
         const obj1 = Ammo.btRigidBody.prototype.upcast(manifold.getBody0());
         const obj2 = Ammo.btRigidBody.prototype.upcast(manifold.getBody1());
 
+        // look for contacts only with the player
         if (player.body != obj1 && player.body != obj2) continue;
         for (let j = 0; j < manifold.getNumContacts(); j++) {
             const point = manifold.getContactPoint(j);
@@ -107,8 +109,7 @@ function loop() {
                 if (obj2 === player.body) {
                     normal = new Ammo.btVector3(-normal.x(), -normal.y(), -normal.z());
                 }
-                // output.innerHTML += `X: ${normal.x().toFixed(2)}<br>Y: ${normal.y().toFixed(2)}<br>Z: ${normal.z().toFixed(2)}<br>`;
-                // output.innerHTML += `Slope: ${(Math.acos(normal.y()) * 180/Math.PI).toFixed(2)} <br>`;
+                // look for the most horizontal contact normal
                 if (Math.acos(normal.y()) < Math.acos(slope.y())) slope = normal;
             }
         }
