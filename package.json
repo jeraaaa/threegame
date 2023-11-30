@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@types/three": "^0.158.2",
-    "ammojs-typed": "^1.0.6",
     "three": "^0.158.0"
   }
 }
