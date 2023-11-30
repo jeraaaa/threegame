@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
 
+import { EffectComposer } from 'three/addons';
+import { RenderPixelatedPass } from 'three/addons/postprocessing/RenderPixelatedPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
 function assert(expr: unknown, msg?: string): asserts expr {
     if (!expr) throw new Error(msg);
 }
@@ -13,12 +17,12 @@ if (document.querySelector("canvas")) {
     document.body.appendChild(canvas);
 }
 
-export let scene: THREE.Scene, renderer: THREE.WebGLRenderer, clock: THREE.Clock, camera: THREE.PerspectiveCamera;
+export let scene: THREE.Scene, renderer: THREE.WebGLRenderer, clock: THREE.Clock, camera: THREE.PerspectiveCamera, composer: EffectComposer;
 function initGraphics() {
     clock = new THREE.Clock();
 
     assert(canvas);
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     camera = new THREE.PerspectiveCamera(
@@ -32,6 +36,14 @@ function initGraphics() {
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x393a3d);
+
+    composer = new EffectComposer(renderer);
+    const pixelatedPass = new RenderPixelatedPass(1, scene, camera);
+    pixelatedPass.depthEdgeStrength = 0;
+    pixelatedPass.normalEdgeStrength = 0;
+    composer.addPass(pixelatedPass);
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
 
     window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -122,5 +134,6 @@ export function render() {
         mesh.rotation.setFromQuaternion(new THREE.Quaternion(rot.x(), rot.y(), rot.z(), rot.w()));
       }
 
-    renderer.render(scene, camera);
+    // renderer.render(scene, camera);
+    composer.render()
 }
