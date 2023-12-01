@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
 
-import { EffectComposer } from 'three/addons';
-import { RenderPixelatedPass } from 'three/addons/postprocessing/RenderPixelatedPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { EffectComposer, RenderPass } from "postprocessing";
+import { GLTF } from 'three/examples/jsm/Addons.js';
 
 function assert(expr: unknown, msg?: string): asserts expr {
     if (!expr) throw new Error(msg);
@@ -38,12 +37,8 @@ function initGraphics() {
     scene.background = new THREE.Color(0x393a3d);
 
     composer = new EffectComposer(renderer);
-    const pixelatedPass = new RenderPixelatedPass(1, scene, camera);
-    pixelatedPass.depthEdgeStrength = 0;
-    pixelatedPass.normalEdgeStrength = 0;
-    composer.addPass(pixelatedPass);
-    const outputPass = new OutputPass();
-    composer.addPass(outputPass);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
 
     window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -90,34 +85,56 @@ export class Object {
     initGraphics(mesh: THREE.Object3D, position?: THREE.Vector3) {
         if (position) mesh.position.set(position.x, position.y, position.z);
         scene.add(mesh);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
         this.mesh = mesh;
     }
 
-    initPhysics(shape: Ammo.btCollisionShape, mass: number, position?: Ammo.btVector3) {
-        shape.setMargin(0.05);
-        transform.setIdentity();
-        if (position) {
-            transform.setOrigin(position);
-            transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
-        } else if (this.mesh) {
-            const pos = this.mesh.position;
-            let rot = new THREE.Quaternion();
-            this.mesh.getWorldQuaternion(rot);
-            transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
-            transform.setRotation(new Ammo.btQuaternion(rot.x, rot.y, rot.z, rot.w));
+    initPhysics(shape: Ammo.btCollisionShape | GLTF, mass?: number, position?: Ammo.btVector3) {
+        if (shape instanceof Ammo.btCollisionShape) {
+            assert(mass);
+            shape.setMargin(0.05);
+            transform.setIdentity();
+            if (position) {
+                transform.setOrigin(position);
+                transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
+            } else if (this.mesh) {
+                const pos = this.mesh.position;
+                let rot = new THREE.Quaternion();
+                this.mesh.getWorldQuaternion(rot);
+                transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+                transform.setRotation(new Ammo.btQuaternion(rot.x, rot.y, rot.z, rot.w));
+            } else {
+                transform.setOrigin(new Ammo.btVector3(0, 0, 0));
+                transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
+            }
+            let inertia = new Ammo.btVector3(0, 0, 0);
+            shape.calculateLocalInertia(mass, inertia);
+            const info = new Ammo.btRigidBodyConstructionInfo(mass, new Ammo.btDefaultMotionState(transform), shape, inertia);
+            this.body = new Ammo.btRigidBody(info);
+            world.addRigidBody(this.body);
+            if (this.mesh) {
+                this.mesh.userData.physicsBody = this.body;
+                rigidBodies.push(this.mesh);
+            }
         } else {
-            transform.setOrigin(new Ammo.btVector3(0, 0, 0));
-            transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
+            shape.scene.traverse((child) => {
+                let mesh = child as THREE.Mesh;
+                if (mesh.isMesh) {
+                    mesh.geometry.getAttribute("position");
+                }
+            });
         }
-        let inertia = new Ammo.btVector3(0, 0, 0);
-        shape.calculateLocalInertia(mass, inertia);
-        const info = new Ammo.btRigidBodyConstructionInfo(mass, new Ammo.btDefaultMotionState(transform), shape, inertia);
-        this.body = new Ammo.btRigidBody(info);
-        world.addRigidBody(this.body);
-        if (this.mesh) {
-            this.mesh.userData.physicsBody = this.body;
-            rigidBodies.push(this.mesh);
-        }
+    }
+}
+
+export class Trigger {
+    object: Ammo.btGhostObject = new Ammo.btGhostObject();;
+    constructor(shape: Ammo.btCollisionShape, position: Ammo.btVector3) {
+        this.object.setCollisionShape(shape);
+        transform.setIdentity();
+        transform.setOrigin(position);
+        this.object.setWorldTransform(transform);
     }
 }
 

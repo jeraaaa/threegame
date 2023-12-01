@@ -1,11 +1,16 @@
 import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
+import {BloomEffect, PixelationEffect, ColorDepthEffect, NoiseEffect, EffectPass, BlendFunction} from 'postprocessing'
 
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 import * as Engine from "./engine"
 
 await Engine.init();
+
+function assert(expr: unknown, msg?: string): asserts expr {
+    if (!expr) throw new Error(msg);
+}
 
 let transform = new Ammo.btTransform();
 
@@ -17,11 +22,22 @@ function world() {
     // const skybox = new THREE.CubeTextureLoader().setPath("skybox/").load(["right.png", "left.png", "up.png", "down.png", "front.png", "back.png"]);
     // skybox.mapping = THREE.CubeRefractionMapping;
     // Engine.scene.background = skybox;
+    Engine.composer.addPass(new EffectPass(Engine.camera, new BloomEffect(), new PixelationEffect(4), new ColorDepthEffect({bits: 24})));
+
+    Engine.renderer.shadowMap.enabled = true;
+
     Engine.scene.background = new THREE.Color(0xa0aab0);
     Engine.scene.fog = new THREE.FogExp2(0xa0aab0, 0.05);
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
     directionalLight.position.set(0, 50, -50);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.top = 100;
+    directionalLight.shadow.camera.bottom = -100;
+    directionalLight.shadow.camera.left = -100;
+    directionalLight.shadow.camera.right = 100;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
     Engine.scene.add(directionalLight);
     
     const ambientLight = new THREE.AmbientLight(0xbbbbbb);
@@ -30,6 +46,7 @@ function world() {
     const floor = new Engine.Object();
     floor.initGraphics(new THREE.Mesh(new THREE.BoxGeometry(100, 1, 100), new THREE.MeshPhongMaterial({ color: 0xdddddd })), new THREE.Vector3(0, -2, 0));
     floor.initPhysics(new Ammo.btBoxShape(new Ammo.btVector3(50, 0.5, 50)), 0);
+    floor.mesh.castShadow = false;
 
     const box = new Engine.Object();
     box.initGraphics(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xff0000 })), new THREE.Vector3(0, 5, 0));
@@ -48,6 +65,13 @@ const loader = new GLTFLoader();
 loader.load('/hat.gltf', function (hat) {
     const obj = new Engine.Object();
     obj.initGraphics(hat.scene);
+    }, undefined, function (error) {
+    console.error(error);
+});
+loader.load('/shed.gltf', function (shed) {
+    const obj = new Engine.Object();
+    obj.initGraphics(shed.scene, new THREE.Vector3(0, -2, 0));
+    obj.initPhysics(shed);
     }, undefined, function (error) {
     console.error(error);
 });
@@ -85,10 +109,28 @@ window.addEventListener("mousemove", (e: MouseEvent) => {
 let grounded = false;
 let slope: Ammo.btVector3;
 
-function loop() {
+let oldTime: number;
+
+let fps = 60;
+let accumulator = 0;
+
+function loop(time: number) {
     requestAnimationFrame(loop);
-    Engine.world.stepSimulation(1 / 120);
-    Engine.render();
+
+    let dt: number;
+    if (oldTime) {
+        dt = time - oldTime;
+    } else {
+        dt = 1/120;
+    }
+
+    Engine.world.stepSimulation(dt);
+
+    accumulator += dt;
+    if (accumulator > 1/fps) {
+        Engine.render();
+        accumulator -= 1/fps;
+    }
 
     const dispatcher = Engine.world.getDispatcher();
     grounded = false;
