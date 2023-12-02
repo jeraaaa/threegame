@@ -5,7 +5,7 @@ import { EffectComposer, RenderPass } from "postprocessing";
 import { GLTF } from 'three/examples/jsm/Addons.js';
 
 function assert(expr: unknown, msg?: string): asserts expr {
-    if (!expr) throw new Error(msg);
+    if (!expr && expr != 0) throw new Error(msg);
 }
 
 export let canvas: HTMLCanvasElement;
@@ -67,6 +67,34 @@ export async function init() {
     initPhysics();
 }
 
+export function createbtBvhTriangleMeshShape(model: GLTF): Ammo.btBvhTriangleMeshShape {
+    let btMesh = new Ammo.btTriangleMesh(true, true);
+    model.scene.traverse((child) => {
+        let mesh = child as THREE.Mesh;
+        if (mesh.isMesh) {
+            const attr = mesh.geometry.getAttribute("position");
+            const array = attr.array;
+            console.log(array);
+            const vertices: Ammo.btVector3[] = [];
+            for (let i = 0; i < array.length; i += 3) {
+                vertices.push(new Ammo.btVector3(array[i], array[i+1], array[i+2]));
+            }
+            if (mesh.geometry.index) {
+                const indices = mesh.geometry.index.array;
+                for (let i = 0; i < indices.length; i+= 3) {
+                    btMesh.addTriangle(vertices[indices[i]], vertices[indices[i+1]], vertices[indices[i+2]]);
+                }
+            } else {
+                for (let i = 0; i < vertices.length; i++) {
+                    btMesh.addTriangle(vertices[i], vertices[i+1], vertices[i+2]);
+                }
+            }
+        }
+    });
+
+    return new Ammo.btBvhTriangleMeshShape(btMesh, true, true);
+}
+
 const rigidBodies: THREE.Object3D[] = [];
 export class Object {
     mesh: THREE.Object3D = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
@@ -90,40 +118,30 @@ export class Object {
         this.mesh = mesh;
     }
 
-    initPhysics(shape: Ammo.btCollisionShape | GLTF, mass?: number, position?: Ammo.btVector3) {
-        if (shape instanceof Ammo.btCollisionShape) {
-            assert(mass);
-            shape.setMargin(0.05);
-            transform.setIdentity();
-            if (position) {
-                transform.setOrigin(position);
-                transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
-            } else if (this.mesh) {
-                const pos = this.mesh.position;
-                let rot = new THREE.Quaternion();
-                this.mesh.getWorldQuaternion(rot);
-                transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
-                transform.setRotation(new Ammo.btQuaternion(rot.x, rot.y, rot.z, rot.w));
-            } else {
-                transform.setOrigin(new Ammo.btVector3(0, 0, 0));
-                transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
-            }
-            let inertia = new Ammo.btVector3(0, 0, 0);
-            shape.calculateLocalInertia(mass, inertia);
-            const info = new Ammo.btRigidBodyConstructionInfo(mass, new Ammo.btDefaultMotionState(transform), shape, inertia);
-            this.body = new Ammo.btRigidBody(info);
-            world.addRigidBody(this.body);
-            if (this.mesh) {
-                this.mesh.userData.physicsBody = this.body;
-                rigidBodies.push(this.mesh);
-            }
+    initPhysics(shape: Ammo.btCollisionShape, mass: number, position?: Ammo.btVector3) {
+        shape.setMargin(0.05);
+        transform.setIdentity();
+        if (position) {
+            transform.setOrigin(position);
+            transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
+        } else if (this.mesh) {
+            const pos = this.mesh.position;
+            let rot = new THREE.Quaternion();
+            this.mesh.getWorldQuaternion(rot);
+            transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+            transform.setRotation(new Ammo.btQuaternion(rot.x, rot.y, rot.z, rot.w));
         } else {
-            shape.scene.traverse((child) => {
-                let mesh = child as THREE.Mesh;
-                if (mesh.isMesh) {
-                    mesh.geometry.getAttribute("position");
-                }
-            });
+            transform.setOrigin(new Ammo.btVector3(0, 0, 0));
+            transform.setRotation(new Ammo.btQuaternion(0, 0, 0, 1));
+        }
+        let inertia = new Ammo.btVector3(0, 0, 0);
+        shape.calculateLocalInertia(mass, inertia);
+        const info = new Ammo.btRigidBodyConstructionInfo(mass, new Ammo.btDefaultMotionState(transform), shape, inertia);
+        this.body = new Ammo.btRigidBody(info);
+        world.addRigidBody(this.body);
+        if (this.mesh) {
+            this.mesh.userData.physicsBody = this.body;
+            rigidBodies.push(this.mesh);
         }
     }
 }

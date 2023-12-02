@@ -43,11 +43,6 @@ function world() {
     const ambientLight = new THREE.AmbientLight(0xbbbbbb);
     Engine.scene.add(ambientLight);
 
-    const floor = new Engine.Object();
-    floor.initGraphics(new THREE.Mesh(new THREE.BoxGeometry(100, 1, 100), new THREE.MeshPhongMaterial({ color: 0xdddddd })), new THREE.Vector3(0, -2, 0));
-    floor.initPhysics(new Ammo.btBoxShape(new Ammo.btVector3(50, 0.5, 50)), 0);
-    floor.mesh.castShadow = false;
-
     const box = new Engine.Object();
     box.initGraphics(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xff0000 })), new THREE.Vector3(0, 5, 0));
     box.initPhysics(new Ammo.btBoxShape(new Ammo.btVector3(.5, .5, .5)), 1);
@@ -68,10 +63,10 @@ loader.load('/hat.gltf', function (hat) {
     }, undefined, function (error) {
     console.error(error);
 });
-loader.load('/shed.gltf', function (shed) {
+await loader.load('/shed.gltf', function (shed) {
     const obj = new Engine.Object();
     obj.initGraphics(shed.scene, new THREE.Vector3(0, -2, 0));
-    obj.initPhysics(shed);
+    obj.initPhysics(Engine.createbtBvhTriangleMeshShape(shed), 0);
     }, undefined, function (error) {
     console.error(error);
 });
