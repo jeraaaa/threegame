@@ -21,7 +21,7 @@ function initGraphics() {
     clock = new THREE.Clock();
 
     assert(canvas);
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false });
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, stencil: false, depth: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     camera = new THREE.PerspectiveCamera(
@@ -67,33 +67,46 @@ export async function init() {
     initPhysics();
 }
 
-export function createbtBvhTriangleMeshShape(model: GLTF): Ammo.btBvhTriangleMeshShape {
-    let btMesh = new Ammo.btTriangleMesh(true, true);
-    model.scene.traverse((child) => {
-        let mesh = child as THREE.Mesh;
-        if (mesh.isMesh) {
-            const attr = mesh.geometry.getAttribute("position");
-            const array = attr.array;
-            console.log(array);
-            const vertices: Ammo.btVector3[] = [];
-            for (let i = 0; i < array.length; i += 3) {
-                vertices.push(new Ammo.btVector3(array[i], array[i+1], array[i+2]));
-            }
-            if (mesh.geometry.index) {
-                const indices = mesh.geometry.index.array;
-                for (let i = 0; i < indices.length; i+= 3) {
-                    btMesh.addTriangle(vertices[indices[i]], vertices[indices[i+1]], vertices[indices[i+2]]);
-                }
-            } else {
-                for (let i = 0; i < vertices.length; i++) {
-                    btMesh.addTriangle(vertices[i], vertices[i+1], vertices[i+2]);
-                }
-            }
-        }
-    });
-
-    return new Ammo.btBvhTriangleMeshShape(btMesh, true, true);
+function logbtVector3(vec: Ammo.btVector3) {
+    console.log(`X: ${vec.x()}, Y: ${vec.y()}, Z: ${vec.z()}`);
 }
+
+// export function createbtBvhTriangleMeshShape(model: GLTF): Ammo.btBvhTriangleMeshShape {
+//     let btMesh = new Ammo.btTriangleMesh(true, true);
+//     model.scene.traverse((child) => {
+//         let mesh = child as THREE.Mesh;
+//         if (mesh.isMesh) {
+//             const attr = mesh.geometry.getAttribute("position");
+//             const array = attr.array;
+//             const vertices: Ammo.btVector3[] = [];
+//             const transform = new THREE.Matrix4();
+//             const rot = new THREE.Quaternion();
+//             const pos = new THREE.Vector3();
+//             mesh.getWorldQuaternion(rot);
+//             mesh.getWorldPosition(pos);
+//             transform.makeRotationFromQuaternion(rot);
+//             transform.setPosition(pos)
+//             for (let i = 0; i < array.length; i += 3) {
+//                 let vec = new THREE.Vector3(array[i], array[i+1], array[i+2]);
+//                 vec.applyMatrix4(transform);
+//                 // vec.applyMatrix4(new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().copy(model.scene.matrixWorld).invert(), mesh.matrixWorld));
+//                 vertices.push(new Ammo.btVector3(vec.x, vec.y, vec.z));
+//             }
+//             if (mesh.geometry.index) {
+//                 const indices = mesh.geometry.index.array;
+//                 for (let i = 0; i < indices.length; i+= 3) {
+//                     btMesh.addTriangle(vertices[indices[i]], vertices[indices[i+1]], vertices[indices[i+2]]);
+//                 }
+//             } else {
+//                 for (let i = 0; i < vertices.length; i++) {
+//                     btMesh.addTriangle(vertices[i], vertices[i+1], vertices[i+2]);
+//                 }
+//             }
+//         }
+//     });
+
+//     return new Ammo.btBvhTriangleMeshShape(btMesh, true, true);
+// }
 
 const rigidBodies: THREE.Object3D[] = [];
 export class Object {
@@ -110,11 +123,16 @@ export class Object {
             return;
         }
     }
-    initGraphics(mesh: THREE.Object3D, position?: THREE.Vector3) {
+    initGraphics(mesh: THREE.Object3D, position?: THREE.Vector3, rotation?: THREE.Euler) {
         if (position) mesh.position.set(position.x, position.y, position.z);
+        if (rotation) mesh.setRotationFromEuler(rotation);
         scene.add(mesh);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.traverse((child) => {
+            child.castShadow = true;
+            child.receiveShadow = true;
+        })
         this.mesh = mesh;
     }
 
@@ -139,20 +157,26 @@ export class Object {
         const info = new Ammo.btRigidBodyConstructionInfo(mass, new Ammo.btDefaultMotionState(transform), shape, inertia);
         this.body = new Ammo.btRigidBody(info);
         world.addRigidBody(this.body);
-        if (this.mesh) {
+        if (this.mesh && mass != 0) {
             this.mesh.userData.physicsBody = this.body;
             rigidBodies.push(this.mesh);
         }
     }
 }
 
+const triggers: Trigger[] = [];
 export class Trigger {
-    object: Ammo.btGhostObject = new Ammo.btGhostObject();;
+    object: Ammo.btGhostObject = new Ammo.btGhostObject();
+    onColliding: (body: Ammo.btRigidBody)=>void = ()=>{};
     constructor(shape: Ammo.btCollisionShape, position: Ammo.btVector3) {
         this.object.setCollisionShape(shape);
         transform.setIdentity();
         transform.setOrigin(position);
         this.object.setWorldTransform(transform);
+        this.object.setCollisionFlags(4);
+        triggers.push(this);
+        world.addCollisionObject(this.object);
+        world.getBroadphase().getOverlappingPairCache().setInternalGhostPairCallback(new Ammo.btGhostPairCallback());
     }
 }
 
@@ -171,4 +195,10 @@ export function render() {
 
     // renderer.render(scene, camera);
     composer.render()
+    
+    triggers.forEach((trigger)=>{
+        for (let i = 0; i < trigger.object.getNumOverlappingObjects(); i++) {
+            trigger.onColliding(Ammo.btRigidBody.prototype.upcast(trigger.object.getOverlappingObject(i)));
+        }
+    });
 }
