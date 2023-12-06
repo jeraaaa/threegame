@@ -17,19 +17,27 @@
 			"mesh":0,
 			"name":"Cube",
 			"scale":[
-				0.41999998688697815,
+				0.6299999952316284,
 				0.10000002384185791,
-				0.593999981880188
+				0.890999972820282
 			]
 		}
 	],
 	"materials":[
 		{
 			"doubleSided":true,
+			"emissiveFactor":[
+				1,
+				1,
+				1
+			],
+			"emissiveTexture":{
+				"index":0
+			},
 			"name":"Material.001",
 			"pbrMetallicRoughness":{
 				"baseColorTexture":{
-					"index":0
+					"index":1
 				},
 				"metallicFactor":0,
 				"roughnessFactor":0.5
@@ -53,6 +61,10 @@
 		}
 	],
 	"textures":[
+		{
+			"sampler":0,
+			"source":0
+		},
 		{
 			"sampler":0,
 			"source":0

@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
 
 import { EffectComposer, RenderPass } from "postprocessing";
-import { GLTF } from 'three/examples/jsm/Addons.js';
 
 function assert(expr: unknown, msg?: string): asserts expr {
     if (!expr && expr != 0) throw new Error(msg);
@@ -44,6 +43,7 @@ function initGraphics() {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
     });
 }
 
@@ -123,6 +123,29 @@ export class Object {
             return;
         }
     }
+    destroy() {
+        let index = rigidBodies.findIndex((obj) => {return obj===this.mesh});
+
+        scene.remove(this.mesh);
+        this.mesh.traverse((child)=>{
+            if ("isMesh" in child) {
+                const mesh = child as THREE.Mesh;
+                mesh.geometry.dispose();
+                if (Array.isArray(mesh.material)) {
+                    mesh.material.forEach((m)=>{m.dispose()});
+                } else {
+                    mesh.material.dispose();
+                }
+            }
+        });
+        world.removeRigidBody(this.body);
+        world.removeCollisionObject(this.body);
+
+        if (index != -1) {
+            rigidBodies.splice(index, 1);
+        }
+    }
+
     initGraphics(mesh: THREE.Object3D, position?: THREE.Vector3, rotation?: THREE.Euler) {
         if (position) mesh.position.set(position.x, position.y, position.z);
         if (rotation) mesh.setRotationFromEuler(rotation);
@@ -177,6 +200,11 @@ export class Trigger {
         triggers.push(this);
         world.addCollisionObject(this.object);
         world.getBroadphase().getOverlappingPairCache().setInternalGhostPairCallback(new Ammo.btGhostPairCallback());
+    }
+
+    destroy() {
+        world.removeCollisionObject(this.object);
+        triggers.splice(triggers.findIndex((value) => {return this===value}), 1);
     }
 }
 

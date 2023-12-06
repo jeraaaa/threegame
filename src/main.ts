@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
-import { BloomEffect, PixelationEffect, ColorDepthEffect, Effect, EffectPass } from 'postprocessing'
+import { BloomEffect, PixelationEffect, ColorDepthEffect, Effect, EffectPass, ChromaticAberrationEffect, BlendFunction, ScanlineEffect } from 'postprocessing'
 
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -26,19 +26,28 @@ function world() {
     // const skybox = new THREE.CubeTextureLoader().setPath("skybox/").load(["right.png", "left.png", "up.png", "down.png", "front.png", "back.png"]);
     // skybox.mapping = THREE.CubeRefractionMapping;
     // Engine.scene.background = skybox;
-    const effects: Effect[] = [];
-    effects.push(new BloomEffect());
-    effects.push(new PixelationEffect(4));
-    effects.push(new ColorDepthEffect({ bits: 24 }));
-    Engine.composer.addPass(new EffectPass(Engine.camera, ...effects));
+    const pass = new EffectPass(Engine.camera, 
+        new BloomEffect(), 
+        new ColorDepthEffect({ bits: 24 }), 
+        new PixelationEffect(4)
+    );
+    pass.dithering = true;
+    Engine.composer.addPass(pass);
+    const scanline = new ScanlineEffect({blendFunction: BlendFunction.MULTIPLY, density: 2});
+    scanline.blendMode.setOpacity(0.25);
+    const pass2 = new EffectPass(Engine.camera, 
+        new ChromaticAberrationEffect(), 
+        scanline
+    )
+    // Engine.composer.addPass(pass2);
 
     window.addEventListener("resize", () => {
-        effects.forEach((effect) => {
-            if ("setSize" in effect) {
-                assert(typeof (effect.setSize) === "function");
-                effect.setSize(window.innerWidth, window.innerHeight);
-            }
-        });
+        // effects.forEach((effect) => {
+        //     if ("setSize" in effect) {
+        //         assert(typeof (effect.setSize) === "function");
+        //         effect.setSize(window.innerWidth, window.innerHeight);
+        //     }
+        // });
     })
 
     Engine.renderer.shadowMap.enabled = true;
@@ -73,6 +82,23 @@ function world() {
 }
 world();
 
+const inventory: {[index: string]: boolean} = {};
+
+function destroy(obj: THREE.Object3D) {
+    obj.traverse((child)=>{
+        if ("isMesh" in child) {
+            const mesh = child as THREE.Mesh;
+            mesh.geometry.dispose();
+            if (Array.isArray(mesh.material)) {
+                mesh.material.forEach((m)=>{m.dispose()});
+            } else {
+                mesh.material.dispose();
+            }
+            Engine.scene.remove(mesh);
+        }
+    })
+}
+
 const player = new Engine.Object();
 player.initPhysics(new Ammo.btCapsuleShape(0.5, 1.5), 4, new Ammo.btVector3(0, 5, 5));
 player.body.setActivationState(4);
@@ -87,12 +113,38 @@ loader.load('/shed.gltf', function (shed) {
         let mesh = child as THREE.Mesh;
         if (mesh.isMesh) {
             assert(mesh.material instanceof THREE.MeshStandardMaterial);
-            if (mesh.name === "Plane003") {
+            const obj = new Engine.Object();
+            objects.push(obj);
+            obj.mesh = mesh;
+            if (mesh.name === "Gate") {
                 mesh.material.transparent = true;
                 mesh.material.shadowSide = THREE.DoubleSide;
                 mesh.material.alphaTest = 0.1;
             }
-            const obj = new Engine.Object();
+            if (mesh.name === "Door") {
+                const pos = new THREE.Vector3();
+                mesh.getWorldPosition(pos);
+                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(4.5, 4.8, .5)), new Ammo.btVector3(pos.x, pos.y, pos.z));
+                trigger.onColliding = (body) => {
+                    if (body === player.body && inventory.axe) {
+                        obj.destroy();
+                        trigger.destroy();
+                    }
+                }
+            }
+            if (mesh.name === "Axe") {
+                const pos = new THREE.Vector3();
+                mesh.getWorldPosition(pos);
+                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(.1, .5, .1)), new Ammo.btVector3(pos.x, pos.y+2.5, pos.z));
+                trigger.onColliding = (body) => {
+                    if (body === player.body) {
+                        inventory.axe = true;
+                        obj.destroy();
+                        trigger.destroy();
+                    }
+                }
+                return;
+            }
             const triMesh = new Ammo.btTriangleMesh(true, true);
             const geometry = mesh.geometry
             const position = geometry.getAttribute("position");
@@ -111,8 +163,6 @@ loader.load('/shed.gltf', function (shed) {
                     triMesh.addTriangle(vertices[i], vertices[i + 1], vertices[i + 2]);
                 }
             }
-            objects.push(obj);
-            obj.mesh = mesh;
             obj.initPhysics(new Ammo.btBvhTriangleMeshShape(triMesh, true, true), 0);
         }
     });
@@ -136,25 +186,21 @@ loader.load('/crate.gltf', function (model) {
 let notes: Engine.Object[] = [];
 loader.load('/note.gltf', function (note) {
     notes.push(new Engine.Object());
-    const t1 = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(.5, .5, .5)), new Ammo.btVector3(0, 0.25, 0));
-    t1.onColliding = (obj) => {
-        if (obj === player.body) {
-            notes[0].mesh.traverse((child) => {
-                if ("isMesh" in child) {
-                    const mesh = child as THREE.Mesh;
-                    mesh.geometry.dispose();
-                    if (Array.isArray(mesh.material)) {
-                        mesh.material.forEach((m)=>{m.dispose()});
-                    } else {
-                        mesh.material.dispose();
-                    }
-                }
-            })
-            Engine.scene.remove(notes[0].mesh);
-            Engine.world.removeCollisionObject(t1.object);
-        }
-    }
     notes[0].initGraphics(note.scene, new THREE.Vector3(0, 0, 0), new THREE.Euler(0, 12 / 180 * Math.PI, 0));
+    notes.forEach((note)=>{
+        const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(.15, .5, .15)), new Ammo.btVector3(0, 0.25, 0));
+        trigger.onColliding = (obj) => {
+            if (obj === player.body) {
+                note.mesh.traverse((child) => {
+                    if ("isMesh" in child) {
+                        destroy(child as THREE.Mesh);
+                    }
+                })
+                Engine.scene.remove(note.mesh);
+                trigger.destroy();
+            }
+        }
+    })
 }, undefined, function (error) {
     console.error(error);
 });
