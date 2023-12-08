@@ -4,18 +4,16 @@ import { BloomEffect, PixelationEffect, ColorDepthEffect, EffectPass, ChromaticA
 
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// import * as Debug from './debug.js';
-
 import * as Engine from "./engine"
 
+// initialize engine
 await Engine.init();
-
-// Debug.initDebug(Engine.scene, Engine.world);
 
 function assert(expr: unknown, msg?: string): asserts expr {
     if (!expr) throw new Error(msg);
 }
 
+// set up temporary transform
 let transform = new Ammo.btTransform();
 
 Engine.camera.rotation.order = "YXZ";
@@ -36,13 +34,10 @@ let code: {[index: string]: number} = {
     "green": Math.floor(Math.random()*256),
     "blue": Math.floor(Math.random()*256)
 };
-console.log(code);
 
+// add objects to the world
 function world() {
-    // const skybox = new THREE.CubeTextureLoader().setPath("skybox/").load(["right.png", "left.png", "up.png", "down.png", "front.png", "back.png"]);
-    // skybox.mapping = THREE.CubeRefractionMapping;
-    // Engine.scene.background = skybox;
-
+    // create sun+shadow map
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
     directionalLight.position.set(0, 50, 50);
     directionalLight.castShadow = true;
@@ -56,15 +51,10 @@ function world() {
     directionalLight.shadow.normalBias = 0.01;
     Engine.scene.add(directionalLight);
 
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(1000));
-    sun.position.set(0, 5000, 5000);
-    // Engine.scene.add(sun);
-
+    // post processing fx
     const bloom = new BloomEffect({blendFunction: BlendFunction.ADD, luminanceThreshold: 0.3, mipmapBlur: true})
-    const rays = new GodRaysEffect(Engine.camera, sun, {blendFunction: BlendFunction.SCREEN, });
     const pass = new EffectPass(Engine.camera, 
-        bloom, 
-        // rays,
+        bloom,
         new ColorDepthEffect({ bits: 24 }), 
         new PixelationEffect(4)
     );
@@ -80,11 +70,14 @@ function world() {
     )
     Engine.composer.addPass(pass2);
 
+    // enable shadow map
     Engine.renderer.shadowMap.enabled = true;
 
+    // show fog
     Engine.scene.background = new THREE.Color(0xa0aab0);
     Engine.scene.fog = new THREE.FogExp2(0xa0aab0, 0.05);
 
+    // make ambient light
     const ambientLight = new THREE.AmbientLight(0xbbbbbb, 0.5);
     Engine.scene.add(ambientLight);
 }
@@ -92,6 +85,7 @@ world();
 
 const inventory: {[index: string]: boolean} = {};
 
+// make player capsule physics
 const player = new Engine.Object();
 player.initPhysics(new Ammo.btCapsuleShape(0.5, 1.5), 4, new Ammo.btVector3(0, 5, 5));
 player.body.setActivationState(4);
@@ -100,6 +94,8 @@ player.body.setAngularFactor(new Ammo.btVector3(0, 0, 0));
 player.body.setRestitution(0);
 
 const loader = new GLTFLoader();
+
+// load map
 loader.load('/shed.gltf', function (shed) {
     const objects: Engine.Object[] = [];
     shed.scene.traverse((child) => {
@@ -108,12 +104,30 @@ loader.load('/shed.gltf', function (shed) {
             const obj = new Engine.Object();
             objects.push(obj);
             obj.mesh = mesh;
+
+            // allow transparent textures
             if (mesh.name === "Gate") {
                 assert(mesh.material instanceof THREE.MeshStandardMaterial);
                 mesh.material.transparent = true;
                 mesh.material.shadowSide = THREE.DoubleSide;
                 mesh.material.alphaTest = 0.1;
+                // add trigger
+                const pos = new THREE.Vector3();
+                mesh.getWorldPosition(pos);
+                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(12, 7.2, .5)), new Ammo.btVector3(pos.x, pos.y, pos.z));
+                trigger.onColliding = (body) => {
+                    if (body === player.body && click) {
+                        if (inventory.keys) {
+                            obj.destroy();
+                            trigger.destroy();
+                            log("You escaped!")
+                        } else {
+                            log("The gate is locked shut.")
+                        }
+                    }
+                }
             }
+            // add trigger
             if (mesh.name === "Door") {
                 const pos = new THREE.Vector3();
                 mesh.getWorldPosition(pos);
@@ -130,22 +144,7 @@ loader.load('/shed.gltf', function (shed) {
                     }
                 }
             }
-            if (mesh.name === "Gate") {
-                const pos = new THREE.Vector3();
-                mesh.getWorldPosition(pos);
-                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(12, 7.2, .5)), new Ammo.btVector3(pos.x, pos.y, pos.z));
-                trigger.onColliding = (body) => {
-                    if (body === player.body && click) {
-                        if (inventory.keys) {
-                            obj.destroy();
-                            trigger.destroy();
-                            log("You escaped!")
-                        } else {
-                            log("The gate is locked shut.")
-                        }
-                    }
-                }
-            }
+            // add trigger
             if (mesh.name === "Shed_Door") {
                 const pos = new THREE.Vector3();
                 mesh.getWorldPosition(pos);
@@ -156,6 +155,7 @@ loader.load('/shed.gltf', function (shed) {
                     assert(form.children[1] instanceof HTMLInputElement)
                     assert(form.children[2] instanceof HTMLInputElement)
                     assert(form.children[3] instanceof HTMLInputElement)
+                    // check for code
                     if (form.children[1].value == code.red.toString() && form.children[2].value == code.green.toString() && form.children[3].value == code.blue.toString()) {
                         obj.destroy();
                         trigger.destroy();
@@ -171,6 +171,7 @@ loader.load('/shed.gltf', function (shed) {
                     }
                 }
             }
+            // create trigger
             if (mesh.name === "Axe") {
                 const pos = new THREE.Vector3();
                 mesh.getWorldPosition(pos);
@@ -185,6 +186,7 @@ loader.load('/shed.gltf', function (shed) {
                 }
                 return;
             }
+            // create trigger
             if (mesh.name === "Lighter") {
                 const pos = new THREE.Vector3();
                 mesh.getWorldPosition(pos);
@@ -199,9 +201,11 @@ loader.load('/shed.gltf', function (shed) {
                 }
                 return;
             }
+            // disable collisions for trees
             if (mesh.name.indexOf("Tree") != -1) {
                 return;
             }
+            // create triggers for all notes
             if (mesh.name.indexOf("Note") != -1) {
                 const pos = new THREE.Vector3();
                 mesh.getWorldPosition(pos);
@@ -220,6 +224,7 @@ loader.load('/shed.gltf', function (shed) {
                 }
                 return;
             }
+            // create physics geometry
             const triMesh = new Ammo.btTriangleMesh(true, true);
             const geometry = mesh.geometry
             const position = geometry.getAttribute("position");
@@ -241,15 +246,15 @@ loader.load('/shed.gltf', function (shed) {
             obj.initPhysics(new Ammo.btBvhTriangleMeshShape(triMesh, true, true), 0);
         }
     });
+    // initialize graphics
     for (let i = 0; i < objects.length; i++) {
         objects[i].initGraphics(objects[i].mesh);
     }
-    // const obj = new Engine.Object();
-    // obj.initGraphics(shed.scene, new THREE.Vector3(0, -2, 0));
-    // obj.initPhysics(Engine.createbtBvhTriangleMeshShape(shed), 0, new Ammo.btVector3(0, 0, 0));
 }, undefined, function (error) {
     console.error(error);
 });
+
+// load crate
 let crate: Engine.Object;
 loader.load('/crate.gltf', function (model) {
     crate = new Engine.Object();
@@ -262,6 +267,7 @@ loader.load('/crate.gltf', function (model) {
 const keys: { [index: string]: boolean } = {};
 const inputs: string[] = [];
 
+// handle key inputs
 window.addEventListener("keydown", (e: KeyboardEvent) => {
     const key: string = e.key.toLowerCase();
 
@@ -277,12 +283,15 @@ window.addEventListener("keyup", (e: KeyboardEvent) => {
     keys[key] = false;
 });
 
+// handle clicking
 window.addEventListener("click", async (e) => {
     if (document.pointerLockElement) {
         click = true
     } else if (!modal) {
+        // try pointer lock
         await Engine.canvas.requestPointerLock();
     } else {
+        // close all modals if they are open
         const modals = document.getElementsByTagName("dialog");
 
         for (let i = 0; i < modals.length; i++) {
@@ -297,6 +306,7 @@ window.addEventListener("click", async (e) => {
     }
 });
 
+// handle mouse moving
 window.addEventListener("mousemove", (e: MouseEvent) => {
     if (document.pointerLockElement) {
         Engine.camera.rotation.y -= e.movementX * Math.PI / 180 * 0.25;
@@ -310,13 +320,13 @@ let slope: Ammo.btVector3;
 
 let oldTime: number;
 
-let fps = 60;
-let accumulator = 0;
-
 let click = false
+
+// game loop
 function loop(time: number) {
     requestAnimationFrame(loop);
 
+    // exit pointer lock if modal is open
     if (modal && document.pointerLockElement) {
         document.exitPointerLock();
     }
@@ -329,14 +339,9 @@ function loop(time: number) {
     }
     oldTime = time;
 
+    // physics
     Engine.world.stepSimulation(dt);
-
-    accumulator += dt;
-    if (accumulator > 1 / fps) {
-        accumulator -= 1 / fps;
-    }
-    // console.log(1/dt);
-
+    // render
     Engine.render();
 
     const dispatcher = Engine.world.getDispatcher();
@@ -363,29 +368,25 @@ function loop(time: number) {
             }
         }
     }
+    // if the slope is less than 45 degrees, the player is grounded
     if (Math.acos(slope.y()) < 45 * Math.PI / 180) grounded = true;
 
+    // handle key inputs
     for (let i = 0; i < inputs.length; i++) {
         const input = inputs.pop();
 
         if (input === " " && grounded) {
             player.body.applyCentralImpulse(new Ammo.btVector3(0, 20, 0));
-        } else if (input === "r") {
-            player.body.getMotionState().getWorldTransform(transform);
-            transform.setOrigin(transform.getOrigin().op_add(new Ammo.btVector3(0, 2, 0)))
-            crate.body.setWorldTransform(transform);
-            crate.body.activate();
-            crate.body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
         }
     }
 
+    // player movement
     const input = new THREE.Vector2((keys.d) ? 1 : 0 + ((keys.a) ? -1 : 0), (keys.w) ? 1 : 0 + ((keys.s) ? -1 : 0));
     input.normalize();
     const yaw = Engine.camera.rotation.y;
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
     const vel = player.body.getLinearVelocity();
-    // let speed = Math.sqrt(square(vel.x()) + square(vel.z()));
 
     let speed = 72;
     if (!grounded) {
@@ -395,12 +396,14 @@ function loop(time: number) {
     }
     player.body.applyCentralForce(new Ammo.btVector3((sin * input.y - cos * input.x) * -speed, 0, (cos * input.y + sin * input.x) * -speed));
 
+    // set cam position
     player.body.getMotionState().getWorldTransform(transform)
     const playerPos = transform.getOrigin();
     Engine.camera.position.set(playerPos.x(), playerPos.y() + .5, playerPos.z());
     playerPos.setY(playerPos.y() + 1);
     transform.setOrigin(playerPos);
 
+    // handle lighter behavior
     if (inventory.lighter && click) {
         const cratePos = crate.mesh.position;
         const pos = new THREE.Vector3(playerPos.x(), playerPos.y(), playerPos.z())
