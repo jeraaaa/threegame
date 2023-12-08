@@ -7,19 +7,39 @@
     <link rel="stylesheet" href="/src/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans&display=swap" rel="stylesheet"> 
+    <link href="https://fonts.googleapis.com/css2?family=Zeyada&display=swap" rel="stylesheet"> 
     <title>Vite + TS</title>
   </head>
   <body>
     <div class="info">
       <p id="output"></p>
     </div>
-    <div class="dialogue">
-      <div class="name">name</div>
-      <div>
-        How do you do, fellow humans?
-      </div>
+    <div class="log" id="log">
     </div>
+    <dialog class="note" id="red">
+      <form>
+        
+      </form>
+    </dialog>
+    <dialog class="note" id="green">
+      <form>
+        
+      </form>
+    </dialog>
+    <dialog class="note" id="blue">
+      <form>
+        
+      </form>
+    </dialog>
+    <dialog id="shed">
+      <form>
+        <p>FFF = 255255255</p>
+        <input type="number">
+        <input type="number">
+        <input type="number">
+        <input type="submit">
+      </form>
+    </dialog>
     <canvas></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>

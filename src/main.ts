@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
-import { BloomEffect, PixelationEffect, ColorDepthEffect, Effect, EffectPass, ChromaticAberrationEffect, BlendFunction, ScanlineEffect } from 'postprocessing'
+import { BloomEffect, PixelationEffect, ColorDepthEffect, EffectPass, ChromaticAberrationEffect, BlendFunction, ScanlineEffect, VignetteEffect, GodRaysEffect } from 'postprocessing'
 
-import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // import * as Debug from './debug.js';
 
@@ -20,40 +20,28 @@ let transform = new Ammo.btTransform();
 
 Engine.camera.rotation.order = "YXZ";
 
-let output = <HTMLElement>document.getElementById("output");
+let modal = false;
+
+let shedModal = <HTMLDialogElement> document.getElementById("shed");
+
+let messages = <HTMLElement> document.getElementById("log");
+function log(msg: string) {
+    const div = document.createElement("div");
+    div.innerText = msg;
+    messages.appendChild(div);
+}
+
+let code: {[index: string]: number} = {
+    "red": Math.floor(Math.random()*256),
+    "green": Math.floor(Math.random()*256),
+    "blue": Math.floor(Math.random()*256)
+};
+console.log(code);
 
 function world() {
     // const skybox = new THREE.CubeTextureLoader().setPath("skybox/").load(["right.png", "left.png", "up.png", "down.png", "front.png", "back.png"]);
     // skybox.mapping = THREE.CubeRefractionMapping;
     // Engine.scene.background = skybox;
-    const pass = new EffectPass(Engine.camera, 
-        new BloomEffect(), 
-        new ColorDepthEffect({ bits: 24 }), 
-        new PixelationEffect(4)
-    );
-    pass.dithering = true;
-    Engine.composer.addPass(pass);
-    const scanline = new ScanlineEffect({blendFunction: BlendFunction.MULTIPLY, density: 2});
-    scanline.blendMode.setOpacity(0.25);
-    const pass2 = new EffectPass(Engine.camera, 
-        new ChromaticAberrationEffect(), 
-        scanline
-    )
-    // Engine.composer.addPass(pass2);
-
-    window.addEventListener("resize", () => {
-        // effects.forEach((effect) => {
-        //     if ("setSize" in effect) {
-        //         assert(typeof (effect.setSize) === "function");
-        //         effect.setSize(window.innerWidth, window.innerHeight);
-        //     }
-        // });
-    })
-
-    Engine.renderer.shadowMap.enabled = true;
-
-    Engine.scene.background = new THREE.Color(0xa0aab0);
-    Engine.scene.fog = new THREE.FogExp2(0xa0aab0, 0.05);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
     directionalLight.position.set(0, 50, 50);
@@ -68,36 +56,41 @@ function world() {
     directionalLight.shadow.normalBias = 0.01;
     Engine.scene.add(directionalLight);
 
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(1000));
+    sun.position.set(0, 5000, 5000);
+    // Engine.scene.add(sun);
+
+    const bloom = new BloomEffect({blendFunction: BlendFunction.ADD, luminanceThreshold: 0.3, mipmapBlur: true})
+    const rays = new GodRaysEffect(Engine.camera, sun, {blendFunction: BlendFunction.SCREEN, });
+    const pass = new EffectPass(Engine.camera, 
+        bloom, 
+        // rays,
+        new ColorDepthEffect({ bits: 24 }), 
+        new PixelationEffect(4)
+    );
+    pass.dithering = true;
+    Engine.composer.addPass(pass);
+    const scanline = new ScanlineEffect({blendFunction: BlendFunction.MULTIPLY, density: 2});
+    scanline.blendMode.setOpacity(0.25);
+    const vignette = new VignetteEffect({offset: 0.35, darkness: 0.5});
+    const pass2 = new EffectPass(Engine.camera, 
+        new ChromaticAberrationEffect(),
+        vignette, 
+        // scanline
+    )
+    Engine.composer.addPass(pass2);
+
+    Engine.renderer.shadowMap.enabled = true;
+
+    Engine.scene.background = new THREE.Color(0xa0aab0);
+    Engine.scene.fog = new THREE.FogExp2(0xa0aab0, 0.05);
+
     const ambientLight = new THREE.AmbientLight(0xbbbbbb, 0.5);
     Engine.scene.add(ambientLight);
-
-    // const plane = new Engine.Object();
-    // plane.initGraphics(new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshPhongMaterial({color: 0xdddddd})), new THREE.Vector3(0, -2, 0));
-    // plane.mesh.rotateX(-Math.PI/2);
-    // plane.initPhysics(new Ammo.btBoxShape(new Ammo.btVector3(50, 50, 0.1)), 0);
-
-    // const box = new Engine.Object();
-    // box.initGraphics(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xff0000 })), new THREE.Vector3(0, 5, 0));
-    // box.initPhysics(new Ammo.btBoxShape(new Ammo.btVector3(.5, .5, .5)), 1);
 }
 world();
 
 const inventory: {[index: string]: boolean} = {};
-
-function destroy(obj: THREE.Object3D) {
-    obj.traverse((child)=>{
-        if ("isMesh" in child) {
-            const mesh = child as THREE.Mesh;
-            mesh.geometry.dispose();
-            if (Array.isArray(mesh.material)) {
-                mesh.material.forEach((m)=>{m.dispose()});
-            } else {
-                mesh.material.dispose();
-            }
-            Engine.scene.remove(mesh);
-        }
-    })
-}
 
 const player = new Engine.Object();
 player.initPhysics(new Ammo.btCapsuleShape(0.5, 1.5), 4, new Ammo.btVector3(0, 5, 5));
@@ -112,11 +105,11 @@ loader.load('/shed.gltf', function (shed) {
     shed.scene.traverse((child) => {
         let mesh = child as THREE.Mesh;
         if (mesh.isMesh) {
-            assert(mesh.material instanceof THREE.MeshStandardMaterial);
             const obj = new Engine.Object();
             objects.push(obj);
             obj.mesh = mesh;
             if (mesh.name === "Gate") {
+                assert(mesh.material instanceof THREE.MeshStandardMaterial);
                 mesh.material.transparent = true;
                 mesh.material.shadowSide = THREE.DoubleSide;
                 mesh.material.alphaTest = 0.1;
@@ -126,9 +119,55 @@ loader.load('/shed.gltf', function (shed) {
                 mesh.getWorldPosition(pos);
                 const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(4.5, 4.8, .5)), new Ammo.btVector3(pos.x, pos.y, pos.z));
                 trigger.onColliding = (body) => {
-                    if (body === player.body && inventory.axe) {
+                    if (body === player.body && click) {
+                        if (inventory.axe) {
+                            obj.destroy();
+                            trigger.destroy();
+                            log("The Rusted Axe broke.")
+                        } else {
+                            log("The door is chained up.")
+                        }
+                    }
+                }
+            }
+            if (mesh.name === "Gate") {
+                const pos = new THREE.Vector3();
+                mesh.getWorldPosition(pos);
+                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(12, 7.2, .5)), new Ammo.btVector3(pos.x, pos.y, pos.z));
+                trigger.onColliding = (body) => {
+                    if (body === player.body && click) {
+                        if (inventory.keys) {
+                            obj.destroy();
+                            trigger.destroy();
+                            log("You escaped!")
+                        } else {
+                            log("The gate is locked shut.")
+                        }
+                    }
+                }
+            }
+            if (mesh.name === "Shed_Door") {
+                const pos = new THREE.Vector3();
+                mesh.getWorldPosition(pos);
+                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(4.5, 4.8, .5)), new Ammo.btVector3(pos.x, pos.y, pos.z));
+                const form = shedModal.children[0]
+                shedModal.children[0].addEventListener("submit", (e)=>{
+                    e.preventDefault();
+                    assert(form.children[1] instanceof HTMLInputElement)
+                    assert(form.children[2] instanceof HTMLInputElement)
+                    assert(form.children[3] instanceof HTMLInputElement)
+                    if (form.children[1].value == code.red.toString() && form.children[2].value == code.green.toString() && form.children[3].value == code.blue.toString()) {
                         obj.destroy();
                         trigger.destroy();
+                    } else {
+                        log("The door remained firmly shut.")
+                    }
+                    if (shedModal.open) shedModal.close();
+                });
+                trigger.onColliding = (body) => {
+                    if (body === player.body && click && !modal) {
+                        shedModal.showModal();
+                        modal = true
                     }
                 }
             }
@@ -137,10 +176,46 @@ loader.load('/shed.gltf', function (shed) {
                 mesh.getWorldPosition(pos);
                 const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(.1, .5, .1)), new Ammo.btVector3(pos.x, pos.y+2.5, pos.z));
                 trigger.onColliding = (body) => {
-                    if (body === player.body) {
+                    if (body === player.body && click) {
                         inventory.axe = true;
                         obj.destroy();
                         trigger.destroy();
+                        log("Got Rusted Axe.")
+                    }
+                }
+                return;
+            }
+            if (mesh.name === "Lighter") {
+                const pos = new THREE.Vector3();
+                mesh.getWorldPosition(pos);
+                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(.1, .5, .1)), new Ammo.btVector3(pos.x, pos.y, pos.z));
+                trigger.onColliding = (body) => {
+                    if (body === player.body && click) {
+                        inventory.lighter = true;
+                        obj.destroy();
+                        trigger.destroy();
+                        log("Got Lighter.")
+                    }
+                }
+                return;
+            }
+            if (mesh.name.indexOf("Tree") != -1) {
+                return;
+            }
+            if (mesh.name.indexOf("Note") != -1) {
+                const pos = new THREE.Vector3();
+                mesh.getWorldPosition(pos);
+                const color = mesh.name.replace("_Note", "").toLowerCase();
+                const dialog = <HTMLDialogElement> document.getElementById(color);
+                dialog.children[0].innerHTML = code[color].toString(16).toUpperCase();
+                const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(.1, .5, .1)), new Ammo.btVector3(pos.x, pos.y+.5, pos.z));
+                trigger.onColliding = (body) => {
+                    if (body === player.body && click) {
+                        obj.destroy();
+                        trigger.destroy();
+                        log(`Got ${mesh.name.replace("_", " ")}.`);
+                        dialog.showModal();
+                        modal = true;
                     }
                 }
                 return;
@@ -183,27 +258,6 @@ loader.load('/crate.gltf', function (model) {
 }, undefined, function (error) {
     console.error(error);
 });
-let notes: Engine.Object[] = [];
-loader.load('/note.gltf', function (note) {
-    notes.push(new Engine.Object());
-    notes[0].initGraphics(note.scene, new THREE.Vector3(0, 0, 0), new THREE.Euler(0, 12 / 180 * Math.PI, 0));
-    notes.forEach((note)=>{
-        const trigger = new Engine.Trigger(new Ammo.btBoxShape(new Ammo.btVector3(.15, .5, .15)), new Ammo.btVector3(0, 0.25, 0));
-        trigger.onColliding = (obj) => {
-            if (obj === player.body) {
-                note.mesh.traverse((child) => {
-                    if ("isMesh" in child) {
-                        destroy(child as THREE.Mesh);
-                    }
-                })
-                Engine.scene.remove(note.mesh);
-                trigger.destroy();
-            }
-        }
-    })
-}, undefined, function (error) {
-    console.error(error);
-});
 
 const keys: { [index: string]: boolean } = {};
 const inputs: string[] = [];
@@ -223,8 +277,24 @@ window.addEventListener("keyup", (e: KeyboardEvent) => {
     keys[key] = false;
 });
 
-window.addEventListener("click", async () => {
-    if (!document.pointerLockElement) await Engine.canvas.requestPointerLock();
+window.addEventListener("click", async (e) => {
+    if (document.pointerLockElement) {
+        click = true
+    } else if (!modal) {
+        await Engine.canvas.requestPointerLock();
+    } else {
+        const modals = document.getElementsByTagName("dialog");
+
+        for (let i = 0; i < modals.length; i++) {
+            modals[i].onclose = (e) => {
+                modal = false;
+                Engine.canvas.requestPointerLock();
+            };
+            if (modals[i].open && e.target == modals[i]) {
+                modals[i].close();
+            }
+        }
+    }
 });
 
 window.addEventListener("mousemove", (e: MouseEvent) => {
@@ -243,15 +313,21 @@ let oldTime: number;
 let fps = 60;
 let accumulator = 0;
 
+let click = false
 function loop(time: number) {
     requestAnimationFrame(loop);
 
+    if (modal && document.pointerLockElement) {
+        document.exitPointerLock();
+    }
+
     let dt: number;
     if (oldTime) {
-        dt = time - oldTime;
+        dt = (time - oldTime)/1000;
     } else {
         dt = 1 / 120;
     }
+    oldTime = time;
 
     Engine.world.stepSimulation(dt);
 
@@ -259,6 +335,7 @@ function loop(time: number) {
     if (accumulator > 1 / fps) {
         accumulator -= 1 / fps;
     }
+    // console.log(1/dt);
 
     Engine.render();
 
@@ -323,6 +400,19 @@ function loop(time: number) {
     Engine.camera.position.set(playerPos.x(), playerPos.y() + .5, playerPos.z());
     playerPos.setY(playerPos.y() + 1);
     transform.setOrigin(playerPos);
+
+    if (inventory.lighter && click) {
+        const cratePos = crate.mesh.position;
+        const pos = new THREE.Vector3(playerPos.x(), playerPos.y(), playerPos.z())
+        if (cratePos.add(pos.multiplyScalar(-1)).length() < 2) {
+            inventory.lighter = false
+            crate.destroy();
+            log("Got keys.")
+            inventory.keys = true;
+        }
+    }
+
+    click = false;
 }
 
 requestAnimationFrame(loop);

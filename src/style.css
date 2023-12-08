@@ -1,5 +1,5 @@
 :root {
-  font-family: 'Pixelify Sans', sans-serif;
+  font-family: 'Zeyada', cursive;
 }
 
 * {
@@ -9,17 +9,33 @@
 body {
   margin: 0;
   height: 100vh;
+  user-select: none;
 }
 
 canvas {
   position: absolute;
+  z-index: -1;
 }
 
 .info {
   position: absolute;
   top: 15px;
   left: 15px;
-  z-index: 1;
+}
+
+dialog {
+  padding: 0;
+  top: 50%;
+  transform: translate(0, -50%);
+  font-size: 2rem;
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+}
+dialog::backdrop {
+  background-color: #0008;
+}
+dialog form {
+  padding: 1em;
 }
 
 .dialogue {
@@ -34,10 +50,28 @@ canvas {
   padding: 15px;
   left: 50%;
   bottom: 15px;
-  z-index: 1;
 }
 
 .dialogue .name {
   position: absolute;
   transform: translate(0, -100%);
+}
+
+.log {
+  position: absolute;
+  display: flex;
+  bottom: 15px;
+  right: 15px;
+  padding: 15px;
+  color: white;
+  flex-direction: column;
+  font-size: 1.5rem;
+}
+
+.log div {
+  margin: 0 5px;
+}
+
+.log div:first-child {
+  margin-top: auto;
 }
