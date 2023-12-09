@@ -96,7 +96,7 @@ Engine.init().then(() => {
     const loader = new GLTFLoader();
 
     // load map
-    loader.load('/shed.gltf', function (shed) {
+    loader.load('/threegame/shed.gltf', function (shed) {
         const objects: Engine.Object[] = [];
         shed.scene.traverse((child) => {
             let mesh = child as THREE.Mesh;
@@ -256,7 +256,7 @@ Engine.init().then(() => {
 
     // load crate
     let crate: Engine.Object;
-    loader.load('/crate.gltf', function (model) {
+    loader.load('/threegame/crate.gltf', function (model) {
         crate = new Engine.Object();
         crate.initGraphics(model.scene, new THREE.Vector3(2, 1, 0));
         crate.initPhysics(new Ammo.btBoxShape(new Ammo.btVector3(.5, .5, .5)), 1);
