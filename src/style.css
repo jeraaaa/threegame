@@ -1,5 +1,6 @@
 :root {
   font-family: 'Zeyada', cursive;
+  color: white;
 }
 
 * {
@@ -73,4 +74,21 @@ dialog form {
 
 .log div:first-child {
   margin-top: auto;
+}
+
+.cursor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background-color: #fff;
+}
+
+#hints {
+  position: absolute;
+  bottom: 15px;
+  left: 15px;
 }

@@ -22,6 +22,8 @@ Engine.init().then(() => {
 
     let shedModal = <HTMLDialogElement>document.getElementById("shed");
 
+    let output = <HTMLElement> document.getElementById("hints");
+
     let messages = <HTMLElement>document.getElementById("log");
     function log(msg: string) {
         const div = document.createElement("div");
@@ -35,10 +37,12 @@ Engine.init().then(() => {
         "blue": Math.floor(Math.random() * 256)
     };
 
+    let hints: string[] = [];
+
     // add objects to the world
     function world() {
         // create sun+shadow map
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        const directionalLight = new THREE.DirectionalLight(0xc2c2cc, 0.3);
         directionalLight.position.set(0, 50, 50);
         directionalLight.castShadow = true;
         directionalLight.shadow.camera.top = 100;
@@ -74,8 +78,8 @@ Engine.init().then(() => {
         Engine.renderer.shadowMap.enabled = true;
 
         // show fog
-        Engine.scene.background = new THREE.Color(0xa0aab0);
-        Engine.scene.fog = new THREE.FogExp2(0xa0aab0, 0.05);
+        Engine.scene.background = new THREE.Color(0x222226);
+        Engine.scene.fog = new THREE.FogExp2(0x222226, 0.1);
 
         // make ambient light
         const ambientLight = new THREE.AmbientLight(0xbbbbbb, 0.5);
@@ -106,11 +110,13 @@ Engine.init().then(() => {
                 obj.mesh = mesh;
 
                 // allow transparent textures
-                if (mesh.name === "Gate") {
+                if (mesh.name === "Gate" || mesh.name === "Door" || mesh.name === "Shed_Door") {
                     assert(mesh.material instanceof THREE.MeshStandardMaterial);
                     mesh.material.transparent = true;
                     mesh.material.shadowSide = THREE.DoubleSide;
                     mesh.material.alphaTest = 0.1;
+                }
+                if (mesh.name === "Gate") {
                     // add trigger
                     const pos = new THREE.Vector3();
                     mesh.getWorldPosition(pos);
@@ -139,7 +145,7 @@ Engine.init().then(() => {
                                 trigger.destroy();
                                 log("The Rusted Axe broke.")
                             } else {
-                                log("The door is chained up.")
+                                log("The exit is blocked.")
                             }
                         }
                     }
@@ -220,6 +226,7 @@ Engine.init().then(() => {
                             log(`Got ${mesh.name.replace("_", " ")}.`);
                             dialog.showModal();
                             modal = true;
+                            hints.push(dialog.children[0].innerHTML);
                         }
                     }
                     return;
@@ -326,6 +333,12 @@ Engine.init().then(() => {
     function loop(time: number) {
         requestAnimationFrame(loop);
 
+        output.innerHTML = "";
+        for (let i = 0; i < hints.length; i++) {
+            output.innerHTML += hints[i];
+            if (i+1 < hints.length) output.innerHTML += ", ";
+        }
+
         // exit pointer lock if modal is open
         if (modal && document.pointerLockElement) {
             document.exitPointerLock();
@@ -388,11 +401,11 @@ Engine.init().then(() => {
         const sin = Math.sin(yaw);
         const vel = player.body.getLinearVelocity();
 
-        let speed = 72;
+        let speed = 110;
         if (!grounded) {
-            speed *= 0.1;
+            speed *= 0.02;
         } else {
-            player.body.setLinearVelocity(new Ammo.btVector3(vel.x() * 0.95, vel.y(), vel.z() * 0.95));
+            player.body.setLinearVelocity(new Ammo.btVector3(vel.x() * 0.9, vel.y(), vel.z() * 0.9));
         }
         player.body.applyCentralForce(new Ammo.btVector3((sin * input.y - cos * input.x) * -speed, 0, (cos * input.y + sin * input.x) * -speed));
 
