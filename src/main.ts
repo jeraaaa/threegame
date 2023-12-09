@@ -161,9 +161,11 @@ Engine.init().then(() => {
                     trigger.onColliding = (body) => {
                         if (body === player.body && click) {
                             if (inventory.keys) {
-                                obj.destroy();
+                                setTimeout(()=>{
+                                    obj.destroy();
+                                    log("You escaped!")
+                                }, 1000)
                                 trigger.destroy();
-                                log("You escaped!")
                                 sounds.gate.play();
                             } else {
                                 log("The gate is locked shut.")
