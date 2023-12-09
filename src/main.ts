@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
 import { BloomEffect, PixelationEffect, ColorDepthEffect, EffectPass, ChromaticAberrationEffect, BlendFunction, ScanlineEffect, VignetteEffect } from 'postprocessing'
 
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 import * as Engine from "./engine"
 
@@ -100,7 +100,9 @@ Engine.init().then(() => {
     const loader = new GLTFLoader();
 
     // load map
+    let check: GLTF;
     loader.load('/threegame/shed.gltf', function (shed) {
+        check = shed;
         const objects: Engine.Object[] = [];
         shed.scene.traverse((child) => {
             let mesh = child as THREE.Mesh;
@@ -353,7 +355,9 @@ Engine.init().then(() => {
         oldTime = time;
 
         // physics
-        Engine.world.stepSimulation(dt);
+        if (check) {
+            Engine.world.stepSimulation(dt);
+        }
         // render
         Engine.render();
 
