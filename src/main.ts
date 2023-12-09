@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as Engine from "./engine"
 
 // initialize engine
-await Engine.init();
+Engine.init();
 
 function assert(expr: unknown, msg?: string): asserts expr {
     if (!expr) throw new Error(msg);
