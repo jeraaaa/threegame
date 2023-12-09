@@ -13,6 +13,9 @@ Engine.init().then(() => {
         if (!expr) throw new Error(msg);
     }
 
+    const audioLoader = new THREE.AudioLoader();
+    const listener = new THREE.AudioListener();
+
     // set up temporary transform
     let transform = new Ammo.btTransform();
 
@@ -99,6 +102,38 @@ Engine.init().then(() => {
 
     const loader = new GLTFLoader();
 
+    function loadSound(path: string): THREE.Audio {
+        const audio = new THREE.Audio(listener);
+        audioLoader.load(path, (data)=>{
+            audio.setBuffer(data);
+        });
+        return audio;
+    }
+    
+
+    let active = new Promise((resolve)=> {
+        function check() {
+            window.removeEventListener("click", check);
+            resolve(true);
+        }
+        window.addEventListener("click", check)
+    });
+
+    const sounds = {
+        ambience: loadSound("/threegame/ambience.mp3"),
+        wood: loadSound("/threegame/wood.wav"),
+        item: loadSound("/threegame/itemget.mp3"),
+        door: loadSound("/threegame/door.mp3"),
+        gate: loadSound("/threegame/gate.mp3"),
+    };
+    sounds.ambience.loop = true;
+    sounds.ambience.loopStart = 1;
+    sounds.ambience.loopEnd = 30;
+
+    active.then(()=>{
+        sounds.ambience.play();
+    });
+
     // load map
     let check: GLTF;
     loader.load('/threegame/shed.gltf', function (shed) {
@@ -129,6 +164,7 @@ Engine.init().then(() => {
                                 obj.destroy();
                                 trigger.destroy();
                                 log("You escaped!")
+                                sounds.gate.play();
                             } else {
                                 log("The gate is locked shut.")
                             }
@@ -146,6 +182,7 @@ Engine.init().then(() => {
                                 obj.destroy();
                                 trigger.destroy();
                                 log("The Rusted Axe broke.")
+                                sounds.wood.play();
                             } else {
                                 log("The exit is blocked.")
                             }
@@ -167,6 +204,7 @@ Engine.init().then(() => {
                         if (form.children[1].value == code.red.toString() && form.children[2].value == code.green.toString() && form.children[3].value == code.blue.toString()) {
                             obj.destroy();
                             trigger.destroy();
+                            sounds.door.play();
                         } else {
                             log("The door remained firmly shut.")
                         }
@@ -190,6 +228,7 @@ Engine.init().then(() => {
                             obj.destroy();
                             trigger.destroy();
                             log("Got Rusted Axe.")
+                            sounds.item.play();
                         }
                     }
                     return;
@@ -205,6 +244,7 @@ Engine.init().then(() => {
                             obj.destroy();
                             trigger.destroy();
                             log("Got Lighter.")
+                            sounds.item.play();
                         }
                     }
                     return;
@@ -229,6 +269,7 @@ Engine.init().then(() => {
                             dialog.showModal();
                             modal = true;
                             hints.push(dialog.children[0].innerHTML);
+                            sounds.item.play();
                         }
                     }
                     return;
@@ -407,7 +448,8 @@ Engine.init().then(() => {
 
         let speed = 110;
         if (!grounded) {
-            speed *= 0.02;
+            speed *= 0.1;
+            player.body.setLinearVelocity(new Ammo.btVector3(vel.x() * 0.99, vel.y(), vel.z() * 0.99));
         } else {
             player.body.setLinearVelocity(new Ammo.btVector3(vel.x() * 0.9, vel.y(), vel.z() * 0.9));
         }
@@ -424,7 +466,7 @@ Engine.init().then(() => {
         if (inventory.lighter && click) {
             const cratePos = crate.mesh.position;
             const pos = new THREE.Vector3(playerPos.x(), playerPos.y(), playerPos.z())
-            if (cratePos.add(pos.multiplyScalar(-1)).length() < 2) {
+            if (cratePos.add(pos.multiplyScalar(-1)).length() < 4) {
                 inventory.lighter = false
                 crate.destroy();
                 log("Got keys.")

@@ -91,4 +91,5 @@ dialog form {
   position: absolute;
   bottom: 15px;
   left: 15px;
+  font-family: 'Courier New', Courier, monospace;
 }
