@@ -67,47 +67,6 @@ export async function init() {
     initPhysics();
 }
 
-function logbtVector3(vec: Ammo.btVector3) {
-    console.log(`X: ${vec.x()}, Y: ${vec.y()}, Z: ${vec.z()}`);
-}
-
-// export function createbtBvhTriangleMeshShape(model: GLTF): Ammo.btBvhTriangleMeshShape {
-//     let btMesh = new Ammo.btTriangleMesh(true, true);
-//     model.scene.traverse((child) => {
-//         let mesh = child as THREE.Mesh;
-//         if (mesh.isMesh) {
-//             const attr = mesh.geometry.getAttribute("position");
-//             const array = attr.array;
-//             const vertices: Ammo.btVector3[] = [];
-//             const transform = new THREE.Matrix4();
-//             const rot = new THREE.Quaternion();
-//             const pos = new THREE.Vector3();
-//             mesh.getWorldQuaternion(rot);
-//             mesh.getWorldPosition(pos);
-//             transform.makeRotationFromQuaternion(rot);
-//             transform.setPosition(pos)
-//             for (let i = 0; i < array.length; i += 3) {
-//                 let vec = new THREE.Vector3(array[i], array[i+1], array[i+2]);
-//                 vec.applyMatrix4(transform);
-//                 // vec.applyMatrix4(new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().copy(model.scene.matrixWorld).invert(), mesh.matrixWorld));
-//                 vertices.push(new Ammo.btVector3(vec.x, vec.y, vec.z));
-//             }
-//             if (mesh.geometry.index) {
-//                 const indices = mesh.geometry.index.array;
-//                 for (let i = 0; i < indices.length; i+= 3) {
-//                     btMesh.addTriangle(vertices[indices[i]], vertices[indices[i+1]], vertices[indices[i+2]]);
-//                 }
-//             } else {
-//                 for (let i = 0; i < vertices.length; i++) {
-//                     btMesh.addTriangle(vertices[i], vertices[i+1], vertices[i+2]);
-//                 }
-//             }
-//         }
-//     });
-
-//     return new Ammo.btBvhTriangleMeshShape(btMesh, true, true);
-// }
-
 const rigidBodies: THREE.Object3D[] = [];
 export class Object {
     mesh: THREE.Object3D = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));

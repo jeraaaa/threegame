@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import Ammo from 'ammojs-typed';
-import { BloomEffect, PixelationEffect, ColorDepthEffect, EffectPass, ChromaticAberrationEffect, BlendFunction, ScanlineEffect, VignetteEffect, GodRaysEffect } from 'postprocessing'
+import { BloomEffect, PixelationEffect, ColorDepthEffect, EffectPass, ChromaticAberrationEffect, BlendFunction, ScanlineEffect, VignetteEffect } from 'postprocessing'
 
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -295,7 +295,7 @@ window.addEventListener("click", async (e) => {
         const modals = document.getElementsByTagName("dialog");
 
         for (let i = 0; i < modals.length; i++) {
-            modals[i].onclose = (e) => {
+            modals[i].onclose = () => {
                 modal = false;
                 Engine.canvas.requestPointerLock();
             };
