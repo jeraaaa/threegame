@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@types/three": "^0.158.2",
-    "ammojs-typed": "git+https://jeraaaa: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@github.com/jeraaaa/ammojs-typed.git",
+    "ammojs-typed": "github:age2pierre/ammojs-typed",
     "postprocessing": "^6.33.3",
     "three": "^0.158.0"
   }
